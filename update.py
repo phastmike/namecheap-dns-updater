@@ -1,13 +1,17 @@
 #!/usr/bin/env python
-import subprocess
+
+import sys
 import json
-from httplib import HTTPSConnection
-from httplib import HTTPConnection
-from base64 import b64encode
-from time import time
-from datetime import datetime
-from os import chdir
+import subprocess
+import xml.etree.ElementTree as ElementTree
+
 from os import path
+from os import chdir
+from time import time
+from base64 import b64encode
+from datetime import datetime
+from httplib import HTTPConnection
+from httplib import HTTPSConnection
 
 CONFIG_JSON_PATH = "config.json"
 IP_FILE_PATH = "current_ip"
@@ -24,8 +28,13 @@ c = HTTPConnection("ip.changeip.com")
 c.request("GET", "/")
 res = c.getresponse()
 data = res.read()
+c.close()
+if (res.status != 200  or res.reason != 'OK'):
+    print 'Failed to get public IP Address...'
+    sys.exit(1) # Maybe try another method if first fails
 
 current_ip = data.split("\n")[0]
+print 'WANIP: ' + current_ip
 
 try:
     ip_file = open(IP_FILE_PATH)
@@ -47,10 +56,21 @@ if current_ip != old_ip:
         )
         res = c.getresponse()
         data = res.read()
-        print "Response: " + data
-
-    f = open(IP_FILE_PATH, "w+")
-    f.write(current_ip)
-    f.close()
+        c.close()
+        if (res.status == 200 and res.reason == 'OK'):
+            #print "Response: " + data
+            xml = ElementTree.fromstring(data)
+            if xml is not None:
+                errcount = xml.find('ErrCount')
+                #print 'ErrCount = ' + errcount.text
+                if (errcount.text == '0'):
+                    f = open(IP_FILE_PATH, "w+")
+                    f.write(current_ip)
+                    f.close()
+                    print 'DNS Update successfull'
+                else:
+                    print 'Error: ' + xml.find('errors/Err1').text
+            else:
+                print 'Error: No xml data from update service...'
 else:
     print "No change"
